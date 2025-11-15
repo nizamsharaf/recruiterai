@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
+import { jobsApi, candidatesApi, evaluationsApi } from '@/lib/api';
+import { toast } from 'sonner@2.0.3';
 import { 
   ArrowLeft, 
   Search, 
@@ -16,7 +18,10 @@ import {
   MapPin,
   Briefcase,
   Users,
-  Calendar
+  Calendar,
+  Copy,
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 
 interface Candidate {
@@ -144,19 +149,59 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
   const [scoreFilter, setScoreFilter] = useState('all');
   const [noticePeriodFilter, setNoticePeriodFilter] = useState('all');
   const [statusTab, setStatusTab] = useState('all');
-  const [candidates, setCandidates] = useState(mockCandidates);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [job, setJob] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const job = jobDetails[jobId as keyof typeof jobDetails] || jobDetails['1'];
+  useEffect(() => {
+    loadJobData();
+  }, [jobId]);
+
+  const loadJobData = async () => {
+    try {
+      setIsLoading(true);
+      const [jobData, candidatesData] = await Promise.all([
+        jobsApi.getById(jobId),
+        candidatesApi.getByJobId(jobId),
+      ]);
+      setJob(jobData);
+      setCandidates(candidatesData || []);
+    } catch (error: any) {
+      console.error('Error loading job data:', error);
+      toast.error('Failed to load job data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyPublicLink = async () => {
+    if (!job?.public_link) {
+      toast.error('No public link available for this job');
+      return;
+    }
+
+    const publicUrl = `${window.location.origin}/job/${job.public_link}`;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success('Public link copied to clipboard!');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      toast.error('Failed to copy link');
+    }
+  };
 
   const filterCandidates = () => {
     return candidates.filter(candidate => {
-      const matchesSearch = candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          candidate.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const evaluation = candidate.evaluations?.[0];
+      const score = evaluation?.overall_score || 0;
+      
+      const matchesSearch = candidate.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          candidate.email?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesScore = scoreFilter === 'all' || 
-        (scoreFilter === 'high' && candidate.score >= 85) ||
-        (scoreFilter === 'medium' && candidate.score >= 70 && candidate.score < 85) ||
-        (scoreFilter === 'low' && candidate.score < 70);
-      const matchesNoticePeriod = noticePeriodFilter === 'all' || candidate.noticePeriod === noticePeriodFilter;
+        (scoreFilter === 'high' && score >= 85) ||
+        (scoreFilter === 'medium' && score >= 70 && score < 85) ||
+        (scoreFilter === 'low' && score < 70);
+      const matchesNoticePeriod = noticePeriodFilter === 'all'; // Can add notice period later
       const matchesStatus = statusTab === 'all' || candidate.status === statusTab;
       
       return matchesSearch && matchesScore && matchesNoticePeriod && matchesStatus;
@@ -192,29 +237,37 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
     onCandidateClick(candidateId, candidateName);
   };
 
-  const CandidateCard = ({ candidate }: { candidate: Candidate }) => (
-    <Card 
-      className="hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => handleCandidateClick(candidate.id, candidate.name)}
-    >
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
-            <div className="md:col-span-2">
-              <p className="font-medium">{candidate.name}</p>
-              <p className="text-sm text-muted-foreground">{candidate.email}</p>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Score</p>
-                <Badge variant={getScoreBadgeVariant(candidate.score)}>
-                  <span className={`text-lg ${getScoreColor(candidate.score)}`}>
-                    {candidate.score}
-                  </span>
-                </Badge>
+  const CandidateCard = ({ candidate }: { candidate: any }) => {
+    const evaluation = candidate.evaluations?.[0];
+    const score = evaluation?.overall_score || 0;
+    
+    return (
+      <Card 
+        className="hover:shadow-md transition-shadow cursor-pointer"
+        onClick={() => handleCandidateClick(candidate.id, candidate.name)}
+      >
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+              <div className="md:col-span-2">
+                <p className="font-medium">{candidate.name}</p>
+                <p className="text-sm text-muted-foreground">{candidate.email}</p>
               </div>
-            </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-1">Score</p>
+                  {evaluation ? (
+                    <Badge variant={getScoreBadgeVariant(score)}>
+                      <span className={`text-lg ${getScoreColor(score)}`}>
+                        {score}
+                      </span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Pending</Badge>
+                  )}
+                </div>
+              </div>
 
             <div>
               <p className="text-sm text-muted-foreground mb-1">Duration</p>
@@ -274,6 +327,27 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
     </Card>
   );
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Card>
+          <CardContent className="pt-6 text-center">
+            <h2 className="text-2xl font-bold mb-2">Job Not Found</h2>
+            <Button onClick={onBack}>Go Back</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -283,8 +357,14 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
         </Button>
         <div className="flex-1">
           <h2>{job.title}</h2>
-          <p className="text-muted-foreground">{job.company}</p>
+          <p className="text-muted-foreground">{job.company_name}</p>
         </div>
+        {job.status === 'live' && job.public_link && (
+          <Button variant="outline" onClick={handleCopyPublicLink}>
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Public Link
+          </Button>
+        )}
       </div>
 
       {/* Job Summary Card */}
@@ -298,7 +378,7 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
               <MapPin className="h-4 w-4 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">Location</p>
-                <p className="font-medium">{job.location}</p>
+                <p className="font-medium">{job.location || 'N/A'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

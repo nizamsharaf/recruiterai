@@ -1,14 +1,22 @@
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
+import { candidatesApi, evaluationsApi, interviewsApi } from '@/lib/api';
+import { toast } from 'sonner@2.0.3';
 import { 
   ArrowLeft, 
   Download, 
   FileText, 
   Headphones,
   Clock,
-  Award
+  Award,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Minus
 } from 'lucide-react';
 
 interface InterviewReportProps {
@@ -17,39 +25,45 @@ interface InterviewReportProps {
   onBack: () => void;
 }
 
-const mockReportData = {
-  '1': {
-    name: 'John Smith',
-    overallScore: 92,
-    duration: '12m 45s',
-    skills: [
-      { name: 'Technical Proficiency', score: 95 },
-      { name: 'Problem Solving', score: 90 },
-      { name: 'Communication', score: 91 }
-    ],
-    transcriptUrl: '#',
-    recordingUrl: '#'
-  },
-  '2': {
-    name: 'Sarah Johnson',
-    overallScore: 88,
-    duration: '9m 20s',
-    skills: [
-      { name: 'Product Thinking', score: 92 },
-      { name: 'Stakeholder Management', score: 85 },
-      { name: 'Strategic Planning', score: 87 }
-    ],
-    transcriptUrl: '#',
-    recordingUrl: '#'
-  }
-};
-
 export function InterviewReport({ candidateId, candidateName, onBack }: InterviewReportProps) {
-  const report = mockReportData[candidateId as keyof typeof mockReportData] || mockReportData['1'];
+  const [evaluation, setEvaluation] = useState<any>(null);
+  const [interview, setInterview] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadReportData();
+  }, [candidateId]);
+
+  const loadReportData = async () => {
+    try {
+      setIsLoading(true);
+      // Get candidate to find interview_id
+      const candidates = await candidatesApi.getByJobId(''); // We need jobId, but let's try a different approach
+      
+      // For now, let's assume we can get the interview directly from candidate
+      // In a real app, we'd need to pass interviewId or fetch it differently
+      const candidate = await fetch(`/api/candidates/${candidateId}`).then(r => r.json()).catch(() => null);
+      
+      if (candidate?.interview_id) {
+        const [evalData, interviewData] = await Promise.all([
+          evaluationsApi.getByInterviewId(candidate.interview_id),
+          fetch(`/api/interviews/${candidate.interview_id}`).then(r => r.json()).catch(() => null),
+        ]);
+        
+        setEvaluation(evalData);
+        setInterview(interviewData);
+      }
+    } catch (error: any) {
+      console.error('Error loading report:', error);
+      toast.error('Failed to load interview report');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleDownloadPDF = () => {
-    // Mock PDF download
-    console.log('Downloading PDF report...');
+    // TODO: Implement PDF generation
+    toast.info('PDF download feature coming soon');
   };
 
   const getScoreColor = (score: number) => {
@@ -64,6 +78,54 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
     return 'bg-red-600';
   };
 
+  const getVerdictBadge = (verdict: string) => {
+    switch (verdict?.toLowerCase()) {
+      case 'go':
+        return <Badge variant="default" className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" /> Go</Badge>;
+      case 'no go':
+        return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> No Go</Badge>;
+      case 'neutral':
+        return <Badge variant="secondary"><Minus className="h-3 w-3 mr-1" /> Neutral</Badge>;
+      default:
+        return <Badge variant="secondary">Pending</Badge>;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!evaluation) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h2>Interview Report</h2>
+            <p className="text-muted-foreground">{candidateName}</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="pt-6 text-center">
+            <p className="text-muted-foreground">No evaluation available yet. The interview may still be in progress.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const overallScore = evaluation.overall_score || 0;
+  const technicalSkills = evaluation.technical_evaluation?.topSkills || [];
+  const communicationScore = evaluation.communication_score || 0;
+  const culturalFitScore = evaluation.cultural_fit_score || 0;
+  const duration = interview?.duration_minutes ? `${interview.duration_minutes} min` : 'N/A';
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -72,9 +134,12 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
           <Button variant="outline" size="icon" onClick={onBack}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
+            <div>
             <h2>Interview Report</h2>
-            <p className="text-muted-foreground">{report.name}</p>
+            <p className="text-muted-foreground">{candidateName}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {getVerdictBadge(evaluation.verdict)}
           </div>
         </div>
         <Button onClick={handleDownloadPDF}>
@@ -94,8 +159,8 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <Award className="h-8 w-8 mx-auto mb-2 text-blue-600" />
               <p className="text-sm text-muted-foreground mb-1">Overall Score</p>
-              <div className={`text-3xl ${getScoreColor(report.overallScore)}`}>
-                {report.overallScore}
+              <div className={`text-3xl ${getScoreColor(overallScore)}`}>
+                {overallScore}
               </div>
             </div>
             
@@ -103,21 +168,25 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
               <Clock className="h-8 w-8 mx-auto mb-2 text-purple-600" />
               <p className="text-sm text-muted-foreground mb-1">Duration</p>
               <div className="text-3xl">
-                {report.duration}
+                {duration}
               </div>
             </div>
 
-            {report.skills.slice(0, 2).map((skill, index) => (
-              <div key={index} className="text-center p-4 bg-gray-50 rounded-lg">
-                <div className="h-8 w-8 mx-auto mb-2 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-blue-600">{index + 1}</span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-1">{skill.name}</p>
-                <div className={`text-3xl ${getScoreColor(skill.score)}`}>
-                  {skill.score}
-                </div>
+            <div className="text-center p-4 bg-gray-50 rounded-lg">
+              <Headphones className="h-8 w-8 mx-auto mb-2 text-green-600" />
+              <p className="text-sm text-muted-foreground mb-1">Communication</p>
+              <div className={`text-3xl ${getScoreColor(communicationScore * 10)}`}>
+                {communicationScore}/10
               </div>
-            ))}
+            </div>
+
+            <div className="text-center p-4 bg-gray-50 rounded-lg">
+              <Award className="h-8 w-8 mx-auto mb-2 text-orange-600" />
+              <p className="text-sm text-muted-foreground mb-1">Cultural Fit</p>
+              <div className={`text-3xl ${getScoreColor(culturalFitScore * 10)}`}>
+                {culturalFitScore}/10
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -129,21 +198,107 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
           <CardDescription>Detailed breakdown of evaluated skills</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {report.skills.map((skill, index) => (
-            <div key={index} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{skill.name}</p>
+          {technicalSkills.length > 0 ? (
+            technicalSkills.map((skill: any, index: number) => (
+              <div key={index} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{skill.skill || skill.name}</p>
+                    {skill.justification && (
+                      <p className="text-sm text-muted-foreground mt-1">{skill.justification}</p>
+                    )}
+                  </div>
+                  <Badge variant={(skill.score || 0) >= 8.5 ? 'default' : (skill.score || 0) >= 7 ? 'secondary' : 'destructive'}>
+                    {skill.score || 0}/10
+                  </Badge>
                 </div>
-                <Badge variant={skill.score >= 85 ? 'default' : skill.score >= 70 ? 'secondary' : 'destructive'}>
-                  {skill.score}/100
-                </Badge>
+                <Progress value={(skill.score || 0) * 10} className="h-2" />
               </div>
-              <Progress value={skill.score} className="h-2" />
+            ))
+          ) : (
+            <p className="text-muted-foreground">No technical skills evaluated yet.</p>
+          )}
+          
+          {/* Key Strengths and Areas for Improvement */}
+          {(evaluation.key_strengths || evaluation.areas_for_improvement) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+              {evaluation.key_strengths && (
+                <div>
+                  <h4 className="font-semibold mb-2 text-green-700">Key Strengths</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {evaluation.key_strengths.split('\n').filter(Boolean).map((strength: string, i: number) => (
+                      <li key={i}>{strength}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {evaluation.areas_for_improvement && (
+                <div>
+                  <h4 className="font-semibold mb-2 text-orange-700">Areas for Improvement</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    {evaluation.areas_for_improvement.split('\n').filter(Boolean).map((area: string, i: number) => (
+                      <li key={i}>{area}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </CardContent>
       </Card>
+
+      {/* Recommendations */}
+      {evaluation.recommendations && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recommendations</CardTitle>
+            <CardDescription>Suggestions for candidate development</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-disc list-inside space-y-2 text-muted-foreground">
+              {evaluation.recommendations.split('\n').filter(Boolean).map((rec: string, i: number) => (
+                <li key={i}>{rec}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* QA Summary */}
+      {evaluation.qa_summary && evaluation.qa_summary.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Question-Answer Summary</CardTitle>
+            <CardDescription>Key questions and responses from the interview</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {evaluation.qa_summary.map((qa: any, index: number) => (
+                <AccordionItem key={index} value={`qa-${index}`}>
+                  <AccordionTrigger className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">Q{index + 1}:</span>
+                      <span className="text-sm">{qa.question}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <p className="text-sm font-semibold text-green-700 mb-1">Expected Answer:</p>
+                        <p className="text-sm text-muted-foreground">{qa.expectedAnswer}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-blue-700 mb-1">Actual Answer:</p>
+                        <p className="text-sm text-muted-foreground">{qa.actualAnswer}</p>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Interview Assets */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -154,11 +309,21 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
             <CardDescription>Full text transcript of the interview</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full" asChild>
-              <a href={report.transcriptUrl} target="_blank" rel="noopener noreferrer">
+            {interview?.transcript ? (
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => {
+                  const blob = new Blob([interview.transcript], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                }}
+              >
                 View Transcript
-              </a>
-            </Button>
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">Transcript not available</p>
+            )}
           </CardContent>
         </Card>
 
@@ -169,49 +334,20 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
             <CardDescription>Listen to the full interview recording</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full" asChild>
-              <a href={report.recordingUrl} target="_blank" rel="noopener noreferrer">
+            {interview?.recording_url ? (
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={() => window.open(interview.recording_url, '_blank')}
+              >
                 Play Recording
-              </a>
-            </Button>
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">Recording not available</p>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Detailed Analysis */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Interview Analysis</CardTitle>
-          <CardDescription>AI-generated insights and observations</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="font-medium mb-2">Strengths</h4>
-            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-              <li>Demonstrated strong technical knowledge and problem-solving abilities</li>
-              <li>Clear and articulate communication throughout the interview</li>
-              <li>Showed enthusiasm and genuine interest in the role</li>
-            </ul>
-          </div>
-          
-          <div>
-            <h4 className="font-medium mb-2">Areas for Development</h4>
-            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-              <li>Could provide more specific examples from past experience</li>
-              <li>Opportunity to elaborate more on team collaboration scenarios</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-medium mb-2">Overall Assessment</h4>
-            <p className="text-sm text-muted-foreground">
-              The candidate demonstrated excellent technical capabilities and strong communication skills. 
-              They showed a clear understanding of the role requirements and provided thoughtful responses 
-              to behavioral questions. Recommended for next stage of interview process.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
