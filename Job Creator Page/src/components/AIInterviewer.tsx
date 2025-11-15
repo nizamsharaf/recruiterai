@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
@@ -94,24 +94,52 @@ export function AIInterviewer() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [showChatCreator, setShowChatCreator] = useState(false);
 
-  const filterInterviewers = (interviewers: Interviewer[]) => {
-    return interviewers.filter(interviewer => {
-      const matchesSearch = interviewer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          interviewer.description.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredInterviewers = useMemo(() => {
+    const normalizedSearch = searchQuery.toLowerCase();
+
+    return mockInterviewers.filter(interviewer => {
       const matchesRole = roleFilter === 'all' || interviewer.jobRole === roleFilter;
-      
-      return matchesSearch && matchesRole;
+
+      if (!matchesRole) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return (
+        interviewer.name.toLowerCase().includes(normalizedSearch) ||
+        interviewer.description.toLowerCase().includes(normalizedSearch)
+      );
     });
-  };
+  }, [roleFilter, searchQuery]);
 
-  const liveInterviewers = filterInterviewers(mockInterviewers.filter(i => i.status === 'live'));
-  const pausedInterviewers = filterInterviewers(mockInterviewers.filter(i => i.status === 'paused'));
+  const liveInterviewers = useMemo(
+    () => filteredInterviewers.filter(i => i.status === 'live'),
+    [filteredInterviewers]
+  );
+  const pausedInterviewers = useMemo(
+    () => filteredInterviewers.filter(i => i.status === 'paused'),
+    [filteredInterviewers]
+  );
 
-  const totalInterviewers = mockInterviewers.length;
-  const totalInterviews = mockInterviewers.reduce((acc, i) => acc + i.interviewsConducted, 0);
+  const { totalInterviewers, totalInterviews } = useMemo(() => {
+    return mockInterviewers.reduce(
+      (acc, interviewer) => {
+        acc.totalInterviewers += 1;
+        acc.totalInterviews += interviewer.interviewsConducted;
+        return acc;
+      },
+      { totalInterviewers: 0, totalInterviews: 0 }
+    );
+  }, []);
   const avgDuration = '37 mins';
 
-  const roles = ['all', ...Array.from(new Set(mockInterviewers.map(i => i.jobRole)))];
+  const roles = useMemo(
+    () => ['all', ...Array.from(new Set(mockInterviewers.map(i => i.jobRole)))],
+    []
+  );
 
   const InterviewerCard = ({ interviewer }: { interviewer: Interviewer }) => (
     <Card className="hover:shadow-lg transition-shadow">
