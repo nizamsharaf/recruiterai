@@ -388,4 +388,3 @@ CREATE POLICY "Users can delete evaluations for their interviews"
             AND jobs.created_by = auth.uid()
         )
     );
-

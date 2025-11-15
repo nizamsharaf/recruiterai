@@ -5,10 +5,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Plus, MapPin, Briefcase, Users, Clock, TrendingUp, Search, Filter } from 'lucide-react';
+import { Plus, MapPin, Briefcase, Users, Clock, TrendingUp, Search, Filter, Hash } from 'lucide-react';
+import { CreateJobPosting } from './CreateJobPosting';
 
 interface JobPosting {
   id: string;
+  requisitionCode?: string;
   title: string;
   company: string;
   location: string;
@@ -18,9 +20,10 @@ interface JobPosting {
   status: 'live' | 'closed';
 }
 
-const mockJobs: JobPosting[] = [
+const initialJobs: JobPosting[] = [
   {
     id: '1',
+    requisitionCode: 'JR-2025-0001',
     title: 'Senior Software Engineer',
     company: 'Tech Corp',
     location: 'San Francisco, CA',
@@ -31,6 +34,7 @@ const mockJobs: JobPosting[] = [
   },
   {
     id: '2',
+    requisitionCode: 'JR-2025-0002',
     title: 'Product Manager',
     company: 'Innovation Labs',
     location: 'Remote',
@@ -41,6 +45,7 @@ const mockJobs: JobPosting[] = [
   },
   {
     id: '3',
+    requisitionCode: 'JR-2025-0003',
     title: 'UX Designer',
     company: 'Design Studio',
     location: 'New York, NY',
@@ -51,6 +56,7 @@ const mockJobs: JobPosting[] = [
   },
   {
     id: '4',
+    requisitionCode: 'JR-2025-0004',
     title: 'Data Scientist',
     company: 'AI Solutions',
     location: 'Boston, MA',
@@ -61,6 +67,7 @@ const mockJobs: JobPosting[] = [
   },
   {
     id: '5',
+    requisitionCode: 'JR-2025-0005',
     title: 'Frontend Developer',
     company: 'Web Studios',
     location: 'Austin, TX',
@@ -71,6 +78,7 @@ const mockJobs: JobPosting[] = [
   },
   {
     id: '6',
+    requisitionCode: 'JR-2025-0006',
     title: 'Marketing Manager',
     company: 'Growth Co',
     location: 'Remote',
@@ -81,6 +89,7 @@ const mockJobs: JobPosting[] = [
   },
   {
     id: '7',
+    requisitionCode: 'JR-2025-0007',
     title: 'DevOps Engineer',
     company: 'Cloud Systems',
     location: 'Seattle, WA',
@@ -100,11 +109,18 @@ export function JobPostings({ onJobClick }: JobPostingsProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [jobs, setJobs] = useState<JobPosting[]>(initialJobs);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const filterJobs = (jobs: JobPosting[]) => {
-    return jobs.filter(job => {
+  const handleJobCreated = (newJob: JobPosting) => {
+    setJobs(prev => [newJob, ...prev]);
+  };
+
+  const filterJobs = (jobsList: JobPosting[]) => {
+    return jobsList.filter(job => {
       const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          job.company.toLowerCase().includes(searchQuery.toLowerCase());
+                          job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (job.requisitionCode && job.requisitionCode.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesLocation = locationFilter === 'all' || job.location === locationFilter;
       const matchesType = typeFilter === 'all' || job.type === typeFilter;
       
@@ -112,19 +128,27 @@ export function JobPostings({ onJobClick }: JobPostingsProps) {
     });
   };
 
-  const liveJobs = filterJobs(mockJobs.filter(job => job.status === 'live'));
-  const closedJobs = filterJobs(mockJobs.filter(job => job.status === 'closed'));
+  const liveJobs = filterJobs(jobs.filter(job => job.status === 'live'));
+  const closedJobs = filterJobs(jobs.filter(job => job.status === 'closed'));
 
-  const locations = ['all', ...Array.from(new Set(mockJobs.map(job => job.location)))];
-  const types = ['all', ...Array.from(new Set(mockJobs.map(job => job.type)))];
+  const locations = ['all', ...Array.from(new Set(jobs.map(job => job.location)))];
+  const types = ['all', ...Array.from(new Set(jobs.map(job => job.type)))];
 
   const JobCard = ({ job }: { job: JobPosting }) => (
     <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => onJobClick(job.id)}>
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <CardTitle className="mb-1">{job.title}</CardTitle>
+            <div className="flex items-center gap-2 mb-1">
+              <CardTitle>{job.title}</CardTitle>
+            </div>
             <p className="text-sm text-muted-foreground">{job.company}</p>
+            {job.requisitionCode && (
+              <div className="flex items-center gap-1 mt-2">
+                <Hash className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">{job.requisitionCode}</span>
+              </div>
+            )}
           </div>
           <Badge variant={job.status === 'live' ? 'default' : 'secondary'}>
             {job.status}
@@ -166,18 +190,24 @@ export function JobPostings({ onJobClick }: JobPostingsProps) {
           <h2>Job Postings</h2>
           <p className="text-muted-foreground">Create and manage your job postings</p>
         </div>
-        <Button>
+        <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Create Job Posting
         </Button>
       </div>
+
+      <CreateJobPosting
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onJobCreated={handleJobCreated}
+      />
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by job title or company..."
+            placeholder="Search by job title, company, or requisition code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { 
   ArrowLeft, 
@@ -14,7 +15,8 @@ import {
   ThumbsDown,
   MapPin,
   Briefcase,
-  Users
+  Users,
+  Calendar
 } from 'lucide-react';
 
 interface Candidate {
@@ -26,11 +28,13 @@ interface Candidate {
   interviewDate: string;
   status: 'pending' | 'approved' | 'rejected';
   appliedDate: string;
+  noticePeriod: '<=15' | '<=30' | '<=60' | '60+';
 }
 
 interface JobDetailsProps {
   jobId: string;
   onBack: () => void;
+  onCandidateClick: (candidateId: string, candidateName: string) => void;
 }
 
 const mockCandidates: Candidate[] = [
@@ -42,7 +46,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '12m 45s',
     interviewDate: '2 hours ago',
     status: 'pending',
-    appliedDate: '2 days ago'
+    appliedDate: '2 days ago',
+    noticePeriod: '<=30'
   },
   {
     id: '2',
@@ -52,7 +57,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '9m 20s',
     interviewDate: '5 hours ago',
     status: 'pending',
-    appliedDate: '3 days ago'
+    appliedDate: '3 days ago',
+    noticePeriod: '<=15'
   },
   {
     id: '3',
@@ -62,7 +68,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '11m 15s',
     interviewDate: '1 day ago',
     status: 'approved',
-    appliedDate: '4 days ago'
+    appliedDate: '4 days ago',
+    noticePeriod: '<=60'
   },
   {
     id: '4',
@@ -72,7 +79,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '15m 10s',
     interviewDate: '1 day ago',
     status: 'pending',
-    appliedDate: '5 days ago'
+    appliedDate: '5 days ago',
+    noticePeriod: '<=15'
   },
   {
     id: '5',
@@ -82,7 +90,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '8m 30s',
     interviewDate: '2 days ago',
     status: 'rejected',
-    appliedDate: '6 days ago'
+    appliedDate: '6 days ago',
+    noticePeriod: '60+'
   },
   {
     id: '6',
@@ -92,7 +101,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '13m 45s',
     interviewDate: '3 days ago',
     status: 'pending',
-    appliedDate: '1 week ago'
+    appliedDate: '1 week ago',
+    noticePeriod: '<=30'
   },
   {
     id: '7',
@@ -102,7 +112,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '14m 20s',
     interviewDate: '3 days ago',
     status: 'approved',
-    appliedDate: '1 week ago'
+    appliedDate: '1 week ago',
+    noticePeriod: '<=15'
   },
   {
     id: '8',
@@ -112,7 +123,8 @@ const mockCandidates: Candidate[] = [
     callDuration: '10m 05s',
     interviewDate: '4 days ago',
     status: 'pending',
-    appliedDate: '1 week ago'
+    appliedDate: '1 week ago',
+    noticePeriod: '<=60'
   }
 ];
 
@@ -127,10 +139,11 @@ const jobDetails = {
   }
 };
 
-export function JobDetails({ jobId, onBack }: JobDetailsProps) {
+export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [scoreFilter, setScoreFilter] = useState('all');
+  const [noticePeriodFilter, setNoticePeriodFilter] = useState('all');
+  const [statusTab, setStatusTab] = useState('all');
   const [candidates, setCandidates] = useState(mockCandidates);
 
   const job = jobDetails[jobId as keyof typeof jobDetails] || jobDetails['1'];
@@ -139,19 +152,25 @@ export function JobDetails({ jobId, onBack }: JobDetailsProps) {
     return candidates.filter(candidate => {
       const matchesSearch = candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           candidate.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter;
       const matchesScore = scoreFilter === 'all' || 
         (scoreFilter === 'high' && candidate.score >= 85) ||
         (scoreFilter === 'medium' && candidate.score >= 70 && candidate.score < 85) ||
         (scoreFilter === 'low' && candidate.score < 70);
+      const matchesNoticePeriod = noticePeriodFilter === 'all' || candidate.noticePeriod === noticePeriodFilter;
+      const matchesStatus = statusTab === 'all' || candidate.status === statusTab;
       
-      return matchesSearch && matchesStatus && matchesScore;
+      return matchesSearch && matchesScore && matchesNoticePeriod && matchesStatus;
     });
   };
 
   const filteredCandidates = filterCandidates();
 
-  const handleDecision = (candidateId: string, decision: 'approved' | 'rejected') => {
+  const pendingCount = candidates.filter(c => c.status === 'pending').length;
+  const approvedCount = candidates.filter(c => c.status === 'approved').length;
+  const rejectedCount = candidates.filter(c => c.status === 'rejected').length;
+
+  const handleDecision = (candidateId: string, decision: 'approved' | 'rejected', event: React.MouseEvent) => {
+    event.stopPropagation();
     setCandidates(prev => prev.map(c => 
       c.id === candidateId ? { ...c, status: decision } : c
     ));
@@ -168,6 +187,92 @@ export function JobDetails({ jobId, onBack }: JobDetailsProps) {
     if (score >= 70) return 'text-yellow-600';
     return 'text-red-600';
   };
+
+  const handleCandidateClick = (candidateId: string, candidateName: string) => {
+    onCandidateClick(candidateId, candidateName);
+  };
+
+  const CandidateCard = ({ candidate }: { candidate: Candidate }) => (
+    <Card 
+      className="hover:shadow-md transition-shadow cursor-pointer"
+      onClick={() => handleCandidateClick(candidate.id, candidate.name)}
+    >
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+            <div className="md:col-span-2">
+              <p className="font-medium">{candidate.name}</p>
+              <p className="text-sm text-muted-foreground">{candidate.email}</p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Score</p>
+                <Badge variant={getScoreBadgeVariant(candidate.score)}>
+                  <span className={`text-lg ${getScoreColor(candidate.score)}`}>
+                    {candidate.score}
+                  </span>
+                </Badge>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Duration</p>
+              <div className="flex items-center gap-1">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{candidate.callDuration}</span>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Notice Period</p>
+              <div className="flex items-center gap-1">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{candidate.noticePeriod} days</span>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Interview</p>
+              <div className="flex items-center gap-1">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">{candidate.interviewDate}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            {candidate.status === 'pending' ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => handleDecision(candidate.id, 'approved', e)}
+                  className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  <ThumbsUp className="h-4 w-4 mr-1" />
+                  Go
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => handleDecision(candidate.id, 'rejected', e)}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <ThumbsDown className="h-4 w-4 mr-1" />
+                  No Go
+                </Button>
+              </>
+            ) : (
+              <Badge variant={candidate.status === 'approved' ? 'default' : 'destructive'}>
+                {candidate.status === 'approved' ? 'Approved' : 'Rejected'}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -225,7 +330,7 @@ export function JobDetails({ jobId, onBack }: JobDetailsProps) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg">Candidates ({filteredCandidates.length})</h3>
+            <h3 className="text-lg">Candidates</h3>
             <p className="text-sm text-muted-foreground">Review and make decisions on applicants</p>
           </div>
         </div>
@@ -242,19 +347,6 @@ export function JobDetails({ jobId, onBack }: JobDetailsProps) {
             />
           </div>
           <div className="flex gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-            
             <Select value={scoreFilter} onValueChange={setScoreFilter}>
               <SelectTrigger className="w-[150px]">
                 <Filter className="h-4 w-4 mr-2" />
@@ -267,90 +359,54 @@ export function JobDetails({ jobId, onBack }: JobDetailsProps) {
                 <SelectItem value="low">Low (&lt;70)</SelectItem>
               </SelectContent>
             </Select>
+
+            <Select value={noticePeriodFilter} onValueChange={setNoticePeriodFilter}>
+              <SelectTrigger className="w-[170px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Notice Period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Periods</SelectItem>
+                <SelectItem value="<=15">&le;15 days</SelectItem>
+                <SelectItem value="<=30">&le;30 days</SelectItem>
+                <SelectItem value="<=60">&le;60 days</SelectItem>
+                <SelectItem value="60+">60+ days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        {/* Candidates List */}
-        <div className="space-y-3">
-          {filteredCandidates.length > 0 ? (
-            filteredCandidates.map((candidate) => (
-              <Card key={candidate.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
-                      <div className="md:col-span-2">
-                        <p className="font-medium">{candidate.name}</p>
-                        <p className="text-sm text-muted-foreground">{candidate.email}</p>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="text-center">
-                          <p className="text-sm text-muted-foreground mb-1">Score</p>
-                          <Badge variant={getScoreBadgeVariant(candidate.score)}>
-                            <span className={`text-lg ${getScoreColor(candidate.score)}`}>
-                              {candidate.score}
-                            </span>
-                          </Badge>
-                        </div>
-                      </div>
+        {/* Status Tabs */}
+        <Tabs value={statusTab} onValueChange={setStatusTab} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="all">
+              All ({candidates.length})
+            </TabsTrigger>
+            <TabsTrigger value="pending">
+              Pending ({pendingCount})
+            </TabsTrigger>
+            <TabsTrigger value="approved">
+              Approved ({approvedCount})
+            </TabsTrigger>
+            <TabsTrigger value="rejected">
+              Rejected ({rejectedCount})
+            </TabsTrigger>
+          </TabsList>
 
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Call Duration</p>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{candidate.callDuration}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-1">Interview</p>
-                        <div className="flex items-center gap-1">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{candidate.interviewDate}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {candidate.status === 'pending' ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDecision(candidate.id, 'approved')}
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                          >
-                            <ThumbsUp className="h-4 w-4 mr-1" />
-                            Go
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDecision(candidate.id, 'rejected')}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <ThumbsDown className="h-4 w-4 mr-1" />
-                            No Go
-                          </Button>
-                        </>
-                      ) : (
-                        <Badge variant={candidate.status === 'approved' ? 'default' : 'destructive'}>
-                          {candidate.status === 'approved' ? 'Approved' : 'Rejected'}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+          <TabsContent value={statusTab} className="space-y-3">
+            {filteredCandidates.length > 0 ? (
+              filteredCandidates.map((candidate) => (
+                <CandidateCard key={candidate.id} candidate={candidate} />
+              ))
+            ) : (
+              <Card>
+                <CardContent className="flex items-center justify-center h-32">
+                  <p className="text-muted-foreground">No candidates match your filters</p>
                 </CardContent>
               </Card>
-            ))
-          ) : (
-            <Card>
-              <CardContent className="flex items-center justify-center h-32">
-                <p className="text-muted-foreground">No candidates match your filters</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
