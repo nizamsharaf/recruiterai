@@ -56,6 +56,58 @@ router.get('/job/:jobId', async (req, res) => {
   }
 });
 
+// Get single candidate with related evaluation/interview
+router.get('/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Missing authorization header' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Fetch candidate with job ownership validation
+    const { data, error } = await supabase
+      .from('candidates')
+      .select(`
+        *,
+        evaluations (*),
+        interviews (*)
+      `)
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    // Ensure the requester owns the related job
+    const { data: job } = await supabase
+      .from('jobs')
+      .select('created_by')
+      .eq('id', data.job_id)
+      .single();
+
+    if (!job || job.created_by !== user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    res.json(data);
+  } catch (error: any) {
+    console.error('Error fetching candidate:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Submit candidate application
 router.post('/', async (req, res) => {
   try {
@@ -111,6 +163,10 @@ router.post('/', async (req, res) => {
         resume_url,
         scheduled_call_time: scheduled_call_time || null,
         call_status: callStatus,
+        designation: designation || null,
+        years_of_experience: years_of_experience || null,
+        current_ctc: current_ctc || null,
+        expected_ctc: expected_ctc || null,
       })
       .select()
       .single();

@@ -136,6 +136,7 @@ router.post('/', async (req, res) => {
         status: status || 'draft',
         public_link: publicLink,
         created_by: user.id,
+        interviewer_id: interviewer_id || null,
       })
       .select()
       .single();

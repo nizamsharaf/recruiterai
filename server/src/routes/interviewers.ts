@@ -75,7 +75,49 @@ router.get('/job/:jobId', async (req, res) => {
   }
 });
 
-// Create AI interviewer using Anthropic
+// Generate AI interviewer using Anthropic (preview only)
+router.post('/generate', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Missing authorization header' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const { jobDescription } = req.body;
+
+    if (!jobDescription) {
+      return res.status(400).json({ error: 'Job description is required' });
+    }
+
+    // Call Anthropic to create interviewer
+    const interviewerData = await createInterviewer(jobDescription);
+
+    // Extract top 3 skills
+    const topSkills = interviewerData.topSkills?.slice(0, 3).map((skill: any) => ({
+      name: skill.name || skill,
+      description: skill.description || '',
+    })) || [];
+
+    res.json({
+      generatedData: {
+        ...interviewerData,
+        topSkills,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error creating interviewer:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create AI interviewer using Anthropic or provided data
 router.post('/create', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -90,14 +132,14 @@ router.post('/create', async (req, res) => {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    const { jobDescription, name, elevenlabs_voice_id, job_id } = req.body;
+    const { jobDescription, name, elevenlabs_voice_id, job_id, generatedData } = req.body;
 
-    if (!jobDescription) {
+    if (!jobDescription && !generatedData) {
       return res.status(400).json({ error: 'Job description is required' });
     }
 
     // Call Anthropic to create interviewer
-    const interviewerData = await createInterviewer(jobDescription);
+    const interviewerData = generatedData || await createInterviewer(jobDescription);
 
     // Extract top 3 skills
     const topSkills = interviewerData.topSkills?.slice(0, 3).map((skill: any) => ({
