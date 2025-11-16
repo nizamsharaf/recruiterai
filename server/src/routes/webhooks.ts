@@ -33,7 +33,7 @@ router.post('/twilio/voice', async (req, res) => {
 
       // Use Gather to collect speech
       const gather = twiml.gather({
-        input: 'speech',
+        input: ['speech'],
         language: 'en-US',
         speechTimeout: 'auto',
         action: `/api/webhooks/twilio/process-speech?callSid=${callSid}`,
@@ -98,7 +98,7 @@ router.post('/twilio/process-speech', async (req, res) => {
 
     // Continue gathering
     const gather = twiml.gather({
-      input: 'speech',
+      input: ['speech'],
       language: 'en-US',
       speechTimeout: 'auto',
       action: `/api/webhooks/twilio/process-speech?callSid=${callSid}`,
