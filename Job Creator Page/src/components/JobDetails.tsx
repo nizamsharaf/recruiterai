@@ -190,7 +190,7 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
     }
   };
 
-  const filterCandidates = () => {
+  const filteredCandidates = useMemo(() => {
     return candidates.filter(candidate => {
       const evaluation = candidate.evaluations?.[0];
       const score = evaluation?.overall_score || 0;
@@ -203,16 +203,29 @@ export function JobDetails({ jobId, onBack, onCandidateClick }: JobDetailsProps)
         (scoreFilter === 'low' && score < 70);
       const matchesNoticePeriod = noticePeriodFilter === 'all'; // Can add notice period later
       const matchesStatus = statusTab === 'all' || candidate.status === statusTab;
-      
+
       return matchesSearch && matchesScore && matchesNoticePeriod && matchesStatus;
     });
-  };
+  }, [candidates, noticePeriodFilter, scoreFilter, searchQuery, statusTab]);
 
-  const filteredCandidates = filterCandidates();
-
-  const pendingCount = candidates.filter(c => c.status === 'pending').length;
-  const approvedCount = candidates.filter(c => c.status === 'approved').length;
-  const rejectedCount = candidates.filter(c => c.status === 'rejected').length;
+  const { pendingCount, approvedCount, rejectedCount } = useMemo(() => {
+    return candidates.reduce(
+      (acc, candidate) => {
+        switch (candidate.status) {
+          case 'approved':
+            acc.approvedCount += 1;
+            break;
+          case 'rejected':
+            acc.rejectedCount += 1;
+            break;
+          default:
+            acc.pendingCount += 1;
+        }
+        return acc;
+      },
+      { pendingCount: 0, approvedCount: 0, rejectedCount: 0 }
+    );
+  }, [candidates]);
 
   const handleDecision = (candidateId: string, decision: 'approved' | 'rejected', event: React.MouseEvent) => {
     event.stopPropagation();

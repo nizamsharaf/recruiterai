@@ -130,7 +130,7 @@ export function AIInterviewer() {
       
       return matchesSearch && matchesRole;
     });
-  };
+  }, [roleFilter, searchQuery]);
 
   const liveInterviewers = filterInterviewers(interviewers);
   const pausedInterviewers: any[] = []; // Can add status filtering later
