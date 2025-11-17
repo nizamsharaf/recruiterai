@@ -25,10 +25,6 @@ export async function initiateCall(params: CallInitiationParams): Promise<string
       statusCallback: `${WEBHOOK_BASE_URL}/api/webhooks/twilio/status`,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
       record: true,
-      transcriptionSettings: {
-        transcribe: true,
-        transcriptionCallback: `${WEBHOOK_BASE_URL}/api/webhooks/twilio/transcription`,
-      },
     });
 
     return call.sid;
@@ -40,14 +36,24 @@ export async function initiateCall(params: CallInitiationParams): Promise<string
 
 export async function getTranscript(callSid: string): Promise<string | null> {
   try {
-    const transcriptions = await client.transcriptions.list({
+    const recordings = await client.recordings.list({
       callSid,
       limit: 1,
     });
 
-    if (transcriptions.length > 0) {
-      const transcription = await client.transcriptions(transcriptions[0].sid).fetch();
-      return transcription.transcriptionText || null;
+    if (recordings.length > 0) {
+      const [recording] = recordings;
+      const transcriptions = await client
+        .recordings(recording.sid)
+        .transcriptions.list({ limit: 1 });
+
+      if (transcriptions.length > 0) {
+        const transcription = await client
+          .recordings(recording.sid)
+          .transcriptions(transcriptions[0].sid)
+          .fetch();
+        return transcription.transcriptionText || null;
+      }
     }
 
     return null;
