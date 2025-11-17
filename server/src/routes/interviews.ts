@@ -47,6 +47,49 @@ router.get('/job/:jobId', async (req, res) => {
   }
 });
 
+// Get single interview
+router.get('/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Missing authorization header' });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const { data: interview, error } = await supabase
+      .from('interviews')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    // Ensure requester owns the related job
+    const { data: job } = await supabase
+      .from('jobs')
+      .select('created_by')
+      .eq('id', interview.job_id)
+      .single();
+
+    if (!job || job.created_by !== user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    res.json(interview);
+  } catch (error: any) {
+    console.error('Error fetching interview:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Initiate interview call
 router.post('/initiate', async (req, res) => {
   try {

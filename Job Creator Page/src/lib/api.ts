@@ -55,7 +55,12 @@ export const jobsApi = {
 export const interviewersApi = {
   getAll: () => fetchWithAuth('/api/interviewers'),
   getByJobId: (jobId: string) => fetchWithAuth(`/api/interviewers/job/${jobId}`),
-  create: (data: { jobDescription: string; name?: string; elevenlabs_voice_id?: string; job_id?: string }) => 
+  generate: (data: { jobDescription: string }) =>
+    fetchWithAuth('/api/interviewers/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  create: (data: { jobDescription?: string; name?: string; elevenlabs_voice_id?: string; job_id?: string; generatedData?: any }) =>
     fetchWithAuth('/api/interviewers/create', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -72,6 +77,7 @@ export const interviewersApi = {
 // Candidates API
 export const candidatesApi = {
   getByJobId: (jobId: string) => fetchWithAuth(`/api/candidates/job/${jobId}`),
+  getById: (id: string) => fetchWithAuth(`/api/candidates/${id}`),
   create: (data: any) => fetchWithAuth('/api/candidates', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -85,6 +91,7 @@ export const candidatesApi = {
 // Interviews API
 export const interviewsApi = {
   getByJobId: (jobId: string) => fetchWithAuth(`/api/interviews/job/${jobId}`),
+  getById: (id: string) => fetchWithAuth(`/api/interviews/${id}`),
   initiate: (data: { candidate_id: string; job_id: string; interviewer_id: string }) =>
     fetchWithAuth('/api/interviews/initiate', {
       method: 'POST',

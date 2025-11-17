@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { candidatesApi, evaluationsApi, interviewsApi } from '@/lib/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { 
   ArrowLeft, 
   Download, 
@@ -37,19 +37,15 @@ export function InterviewReport({ candidateId, candidateName, onBack }: Intervie
   const loadReportData = async () => {
     try {
       setIsLoading(true);
-      // Get candidate to find interview_id
-      const candidates = await candidatesApi.getByJobId(''); // We need jobId, but let's try a different approach
-      
-      // For now, let's assume we can get the interview directly from candidate
-      // In a real app, we'd need to pass interviewId or fetch it differently
-      const candidate = await fetch(`/api/candidates/${candidateId}`).then(r => r.json()).catch(() => null);
-      
-      if (candidate?.interview_id) {
+      const candidate = await candidatesApi.getById(candidateId);
+      const interviewId = candidate?.interviews?.[0]?.id;
+
+      if (interviewId) {
         const [evalData, interviewData] = await Promise.all([
-          evaluationsApi.getByInterviewId(candidate.interview_id),
-          fetch(`/api/interviews/${candidate.interview_id}`).then(r => r.json()).catch(() => null),
+          evaluationsApi.getByInterviewId(interviewId),
+          interviewsApi.getById(interviewId),
         ]);
-        
+
         setEvaluation(evalData);
         setInterview(interviewData);
       }

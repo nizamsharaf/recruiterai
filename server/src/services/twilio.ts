@@ -29,8 +29,6 @@ export async function initiateCall(params: CallInitiationParams): Promise<string
         transcribe: true,
         transcriptionCallback: `${WEBHOOK_BASE_URL}/api/webhooks/twilio/transcription`,
       },
-      // Store metadata in the call
-      twiml: `<Response><Say>Connecting your call...</Say></Response>`,
     });
 
     return call.sid;

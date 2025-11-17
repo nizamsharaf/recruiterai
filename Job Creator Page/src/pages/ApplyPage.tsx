@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { ArrowLeft, Loader2, Upload, CalendarIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { jobsApi, candidatesApi } from '@/lib/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 export function ApplyPage() {
