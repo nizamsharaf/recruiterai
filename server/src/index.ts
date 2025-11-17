@@ -8,6 +8,7 @@ import candidatesRoutes from './routes/candidates';
 import interviewsRoutes from './routes/interviews';
 import evaluationsRoutes from './routes/evaluations';
 import webhooksRoutes from './routes/webhooks';
+import { supabase } from './config/supabase';
 
 dotenv.config();
 
@@ -37,7 +38,27 @@ app.use('/api/evaluations', evaluationsRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 
 // Public routes
-app.use('/api/public', jobsRoutes); // Public job viewing
+app.get('/api/public/jobs/:publicLink', async (req, res) => {
+  try {
+    const { publicLink } = req.params;
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('public_link', publicLink)
+      .eq('status', 'live')
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json(data);
+  } catch (error: any) {
+    console.error('Error fetching public job:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -16,7 +16,7 @@ import {
   Plus,
   Loader2
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { jobsApi, interviewersApi } from '@/lib/api';
 
 interface CreateJobPostingProps {
@@ -223,6 +223,7 @@ export function CreateJobPosting({ open, onOpenChange, onJobCreated }: CreateJob
         department: formData.department,
         description: formData.jobDescription,
         status: 'live', // or 'draft' if they want to save without publishing
+        interviewer_id: formData.aiInterviewer || null,
       };
 
       const newJob = await jobsApi.create(jobData);

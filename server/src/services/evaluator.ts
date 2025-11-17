@@ -48,13 +48,13 @@ export async function evaluateInterview(interviewId: string): Promise<any> {
     const evaluationData = {
       interview_id: interviewId,
       overall_score: evaluation.overallScore,
-      key_strengths: evaluation.keyStrengths?.join('\n') || '',
-      areas_for_improvement: evaluation.areasForImprovement?.join('\n') || '',
+      key_strengths: evaluation.keyStrengths || [],
+      areas_for_improvement: evaluation.areasForImprovement || [],
       communication_score: evaluation.communicationScore,
       technical_evaluation: evaluation.technicalEvaluation || {},
       cultural_fit_score: evaluation.culturalFitScore,
       verdict: evaluation.verdict,
-      recommendations: evaluation.recommendations?.join('\n') || '',
+      recommendations: evaluation.recommendations || [],
       qa_summary: evaluation.qaSummary || [],
       analysis_metadata: {
         ...evaluation.analysisMetadata,

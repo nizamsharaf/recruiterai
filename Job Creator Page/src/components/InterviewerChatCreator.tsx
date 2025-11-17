@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Send, Bot, User, X, Loader2 } from 'lucide-react';
 import { interviewersApi } from '@/lib/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -30,6 +30,7 @@ export function InterviewerChatCreator({ onClose, onInterviewerCreated }: Interv
   const [isLoading, setIsLoading] = useState(false);
   const [generatedData, setGeneratedData] = useState<any>(null);
   const [interviewerName, setInterviewerName] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -46,13 +47,14 @@ export function InterviewerChatCreator({ onClose, onInterviewerCreated }: Interv
     setIsLoading(true);
 
     try {
-      // Call API to create interviewer
-      const response = await interviewersApi.create({
+      // Call API to generate interviewer preview
+      const response = await interviewersApi.generate({
         jobDescription: currentInput,
       });
 
       const generated = response.generatedData || response;
       setGeneratedData(generated);
+      setJobDescription(currentInput);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -92,7 +94,8 @@ Please provide a name for this interviewer, and I'll save it for you.`
     try {
       setIsLoading(true);
       const response = await interviewersApi.create({
-        jobDescription: messages.find(m => m.role === 'user')?.content || '',
+        jobDescription,
+        generatedData,
         name: interviewerName,
         elevenlabs_voice_id: null, // Can be set later
       });

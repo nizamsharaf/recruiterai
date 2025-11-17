@@ -6,7 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
 import { MapPin, Briefcase, Clock, Building2, Loader2 } from 'lucide-react';
 import { jobsApi } from '@/lib/api';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 export function PublicJobPage() {
   const { publicLink } = useParams<{ publicLink: string }>();
