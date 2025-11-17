@@ -13,9 +13,11 @@ import {
   Check,
   Upload,
   Sparkles,
-  Plus
+  Plus,
+  Loader2
 } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { jobsApi, interviewersApi } from '@/lib/api';
 
 interface CreateJobPostingProps {
   open: boolean;
@@ -44,13 +46,6 @@ interface FormData {
   ctcMax: string;
 }
 
-const mockAIInterviewers = [
-  { id: '1', name: 'Technical Screening Bot', type: 'Engineering' },
-  { id: '2', name: 'Sales Assessment AI', type: 'Sales' },
-  { id: '3', name: 'Product Manager Evaluator', type: 'Product' },
-  { id: '4', name: 'General Skills Interviewer', type: 'General' }
-];
-
 export function CreateJobPosting({ open, onOpenChange, onJobCreated }: CreateJobPostingProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState<FormData>({
@@ -75,6 +70,30 @@ export function CreateJobPosting({ open, onOpenChange, onJobCreated }: CreateJob
   });
   const [isAIGenerating, setIsAIGenerating] = useState(false);
   const [newSkill, setNewSkill] = useState('');
+  const [availableInterviewers, setAvailableInterviewers] = useState<any[]>([]);
+  const [isLoadingInterviewers, setIsLoadingInterviewers] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Load available interviewers
+  useEffect(() => {
+    if (open) {
+      loadInterviewers();
+    }
+  }, [open]);
+
+  const loadInterviewers = async () => {
+    try {
+      setIsLoadingInterviewers(true);
+      const data = await interviewersApi.getAll();
+      setAvailableInterviewers(data || []);
+    } catch (error: any) {
+      console.error('Error loading interviewers:', error);
+      toast.error('Failed to load interviewers');
+      setAvailableInterviewers([]);
+    } finally {
+      setIsLoadingInterviewers(false);
+    }
+  };
 
   // Generate unique requisition code when dialog opens
   useEffect(() => {
@@ -187,30 +206,44 @@ export function CreateJobPosting({ open, onOpenChange, onJobCreated }: CreateJob
     setCurrentStep(prev => Math.max(prev - 1, 0));
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!validateStep()) {
       toast.error('Please fill all required fields');
       return;
     }
 
-    const newJob = {
-      id: Date.now().toString(),
-      requisitionCode: formData.requisitionCode,
-      title: formData.jobTitle,
-      company: formData.companyName,
-      location: formData.location,
-      type: formData.employmentType,
-      workMode: formData.workMode,
-      department: formData.department,
-      applicants: 0,
-      postedDate: 'Just now',
-      status: 'live',
-      ...formData
-    };
+    try {
+      setIsSubmitting(true);
 
-    onJobCreated(newJob);
-    toast.success('Job posted successfully!');
-    handleClose();
+      const jobData = {
+        title: formData.jobTitle,
+        company_name: formData.companyName,
+        location: formData.location,
+        work_mode: formData.workMode,
+        department: formData.department,
+        description: formData.jobDescription,
+        status: 'live', // or 'draft' if they want to save without publishing
+        interviewer_id: formData.aiInterviewer || null,
+      };
+
+      const newJob = await jobsApi.create(jobData);
+
+      // If interviewer is selected, link it to the job
+      if (formData.aiInterviewer) {
+        await interviewersApi.update(formData.aiInterviewer, {
+          job_id: newJob.id,
+        });
+      }
+
+      onJobCreated(newJob);
+      toast.success('Job posted successfully!');
+      handleClose();
+    } catch (error: any) {
+      console.error('Error creating job:', error);
+      toast.error(`Failed to create job: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddQuestions = () => {
@@ -272,11 +305,22 @@ export function CreateJobPosting({ open, onOpenChange, onJobCreated }: CreateJob
                     <SelectValue placeholder="Select an AI interviewer" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockAIInterviewers.map(interviewer => (
-                      <SelectItem key={interviewer.id} value={interviewer.id}>
-                        {interviewer.name} - {interviewer.type}
+                    {isLoadingInterviewers ? (
+                      <SelectItem value="loading" disabled>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2 inline" />
+                        Loading interviewers...
                       </SelectItem>
-                    ))}
+                    ) : availableInterviewers.length > 0 ? (
+                      availableInterviewers.map((interviewer: any) => (
+                        <SelectItem key={interviewer.id} value={interviewer.id}>
+                          {interviewer.name} - {interviewer.position_details?.jobTitle || 'N/A'}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No interviewers available. Create one first.
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -600,9 +644,18 @@ export function CreateJobPosting({ open, onOpenChange, onJobCreated }: CreateJob
                   <Plus className="h-4 w-4 mr-2" />
                   Add Questions
                 </Button>
-                <Button onClick={handlePost} disabled={!validateStep()}>
-                  <Check className="h-4 w-4 mr-2" />
-                  Post Job
+                <Button onClick={handlePost} disabled={!validateStep() || isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4 mr-2" />
+                      Post Job
+                    </>
+                  )}
                 </Button>
               </>
             )}

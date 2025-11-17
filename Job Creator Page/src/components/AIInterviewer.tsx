@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
@@ -6,6 +6,8 @@ import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 import { InterviewerChatCreator } from './InterviewerChatCreator';
+import { interviewersApi } from '@/lib/api';
+import { toast } from 'sonner';
 import { 
   Phone, 
   Clock, 
@@ -15,7 +17,8 @@ import {
   Bot, 
   PlayCircle, 
   PauseCircle,
-  Calendar
+  Calendar,
+  Loader2
 } from 'lucide-react';
 
 interface Interviewer {
@@ -93,55 +96,52 @@ export function AIInterviewer() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showChatCreator, setShowChatCreator] = useState(false);
+  const [interviewers, setInterviewers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredInterviewers = useMemo(() => {
-    const normalizedSearch = searchQuery.toLowerCase();
+  useEffect(() => {
+    loadInterviewers();
+  }, []);
 
-    return mockInterviewers.filter(interviewer => {
-      const matchesRole = roleFilter === 'all' || interviewer.jobRole === roleFilter;
+  const loadInterviewers = async () => {
+    try {
+      setIsLoading(true);
+      const data = await interviewersApi.getAll();
+      setInterviewers(data || []);
+    } catch (error: any) {
+      console.error('Error loading interviewers:', error);
+      toast.error('Failed to load interviewers');
+      setInterviewers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      if (!matchesRole) {
-        return false;
-      }
+  const handleInterviewerCreated = (newInterviewer: any) => {
+    loadInterviewers();
+    toast.success('Interviewer created successfully!');
+  };
 
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return (
-        interviewer.name.toLowerCase().includes(normalizedSearch) ||
-        interviewer.description.toLowerCase().includes(normalizedSearch)
-      );
+  const filterInterviewers = (interviewers: any[]) => {
+    return interviewers.filter(interviewer => {
+      const matchesSearch = interviewer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          interviewer.position_details?.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesRole = roleFilter === 'all' || interviewer.position_details?.jobTitle === roleFilter;
+      
+      return matchesSearch && matchesRole;
     });
   }, [roleFilter, searchQuery]);
 
-  const liveInterviewers = useMemo(
-    () => filteredInterviewers.filter(i => i.status === 'live'),
-    [filteredInterviewers]
-  );
-  const pausedInterviewers = useMemo(
-    () => filteredInterviewers.filter(i => i.status === 'paused'),
-    [filteredInterviewers]
-  );
+  const liveInterviewers = filterInterviewers(interviewers);
+  const pausedInterviewers: any[] = []; // Can add status filtering later
 
-  const { totalInterviewers, totalInterviews } = useMemo(() => {
-    return mockInterviewers.reduce(
-      (acc, interviewer) => {
-        acc.totalInterviewers += 1;
-        acc.totalInterviews += interviewer.interviewsConducted;
-        return acc;
-      },
-      { totalInterviewers: 0, totalInterviews: 0 }
-    );
-  }, []);
+  const totalInterviewers = interviewers.length;
+  const totalInterviews = 0; // Can calculate from interviews later
   const avgDuration = '37 mins';
 
-  const roles = useMemo(
-    () => ['all', ...Array.from(new Set(mockInterviewers.map(i => i.jobRole)))],
-    []
-  );
+  const roles = ['all', ...Array.from(new Set(interviewers.map((i: any) => i.position_details?.jobTitle).filter(Boolean)))];
 
-  const InterviewerCard = ({ interviewer }: { interviewer: Interviewer }) => (
+  const InterviewerCard = ({ interviewer }: { interviewer: any }) => (
     <Card className="hover:shadow-lg transition-shadow">
       <CardHeader>
         <div className="flex items-start justify-between">
@@ -150,26 +150,28 @@ export function AIInterviewer() {
               <Bot className="h-5 w-5 text-blue-600" />
               <CardTitle>{interviewer.name}</CardTitle>
             </div>
-            <CardDescription>{interviewer.description}</CardDescription>
+            <CardDescription>
+              {interviewer.position_details?.roleOverview || 'AI Interviewer for technical screening'}
+            </CardDescription>
           </div>
-          <Badge variant={interviewer.status === 'live' ? 'default' : 'secondary'}>
-            {interviewer.status === 'live' ? (
-              <PlayCircle className="h-3 w-3 mr-1" />
-            ) : (
-              <PauseCircle className="h-3 w-3 mr-1" />
-            )}
-            {interviewer.status}
+          <Badge variant="default">
+            <PlayCircle className="h-3 w-3 mr-1" />
+            Active
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
           <div>
-            <span className="font-medium text-gray-900">{interviewer.jobRole}</span>
+            <span className="font-medium text-gray-900">
+              {interviewer.position_details?.jobTitle || 'N/A'}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <span>•</span>
-            <span>{interviewer.questionCount} questions</span>
+            <span>
+              {interviewer.question_bank?.sections?.reduce((acc: number, s: any) => acc + (s.questions?.length || 0), 0) || 0} questions
+            </span>
           </div>
         </div>
         
@@ -178,21 +180,16 @@ export function AIInterviewer() {
             <p className="text-xs text-muted-foreground">Interviews Conducted</p>
             <div className="flex items-center gap-1">
               <Phone className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">{interviewer.interviewsConducted}</span>
+              <span className="text-sm">0</span>
             </div>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">Avg Duration</p>
+            <p className="text-xs text-muted-foreground">Created</p>
             <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm">{interviewer.averageDuration}</span>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{new Date(interviewer.created_at).toLocaleDateString()}</span>
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-1 text-xs text-muted-foreground pt-2 border-t">
-          <Calendar className="h-3 w-3" />
-          <span>Created {interviewer.createdDate}</span>
         </div>
       </CardContent>
     </Card>
@@ -284,7 +281,11 @@ export function AIInterviewer() {
         </TabsList>
 
         <TabsContent value="live" className="space-y-4">
-          {liveInterviewers.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : liveInterviewers.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {liveInterviewers.map((interviewer) => (
                 <InterviewerCard key={interviewer.id} interviewer={interviewer} />
@@ -332,7 +333,16 @@ export function AIInterviewer() {
 
       {/* Chat Creator Modal */}
       {showChatCreator && (
-        <InterviewerChatCreator onClose={() => setShowChatCreator(false)} />
+        <InterviewerChatCreator 
+          onClose={() => setShowChatCreator(false)}
+          onInterviewerCreated={handleInterviewerCreated}
+        />
+      )}
+      
+      {isLoading && (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       )}
     </div>
   );

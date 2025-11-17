@@ -3,7 +3,9 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
-import { Send, Bot, User, X } from 'lucide-react';
+import { Send, Bot, User, X, Loader2 } from 'lucide-react';
+import { interviewersApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -13,9 +15,10 @@ interface Message {
 
 interface InterviewerChatCreatorProps {
   onClose: () => void;
+  onInterviewerCreated?: (interviewer: any) => void;
 }
 
-export function InterviewerChatCreator({ onClose }: InterviewerChatCreatorProps) {
+export function InterviewerChatCreator({ onClose, onInterviewerCreated }: InterviewerChatCreatorProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -24,9 +27,13 @@ export function InterviewerChatCreator({ onClose }: InterviewerChatCreatorProps)
     }
   ]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedData, setGeneratedData] = useState<any>(null);
+  const [interviewerName, setInterviewerName] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    if (!input.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -35,17 +42,73 @@ export function InterviewerChatCreator({ onClose }: InterviewerChatCreatorProps)
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput('');
+    setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      // Call API to generate interviewer preview
+      const response = await interviewersApi.generate({
+        jobDescription: currentInput,
+      });
+
+      const generated = response.generatedData || response;
+      setGeneratedData(generated);
+      setJobDescription(currentInput);
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "Great! I'm analyzing the job requirements. I'll create an interviewer with questions tailored to this role, including technical assessments, behavioral questions, and culture fit evaluation. The interviewer will be configured with ElevenLabs for natural voice interaction."
+        content: `Great! I've created an AI interviewer configuration based on your job description. I've identified the following:
+
+**Position**: ${generated.positionDetails?.jobTitle || 'N/A'}
+**Top 3 Skills**: ${generated.topSkills?.map((s: any) => s.name || s).join(', ') || 'N/A'}
+**Questions Generated**: ${generated.questionBank?.sections?.reduce((acc: number, s: any) => acc + (s.questions?.length || 0), 0) || 0} questions
+
+Please provide a name for this interviewer, and I'll save it for you.`
       };
       setMessages(prev => [...prev, aiMessage]);
-    }, 1000);
+      
+      // Set default name from position
+      setInterviewerName(generated.positionDetails?.jobTitle || 'AI Interviewer');
+    } catch (error: any) {
+      console.error('Error creating interviewer:', error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `I'm sorry, I encountered an error while creating the interviewer: ${error.message}. Please try again with a more detailed job description.`
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      toast.error('Failed to create interviewer');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!generatedData || !interviewerName.trim()) {
+      toast.error('Please provide a name for the interviewer');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await interviewersApi.create({
+        jobDescription,
+        generatedData,
+        name: interviewerName,
+        elevenlabs_voice_id: null, // Can be set later
+      });
+
+      toast.success('Interviewer created successfully!');
+      onInterviewerCreated?.(response);
+      onClose();
+    } catch (error: any) {
+      console.error('Error saving interviewer:', error);
+      toast.error('Failed to save interviewer');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -88,16 +151,34 @@ export function InterviewerChatCreator({ onClose }: InterviewerChatCreatorProps)
               ))}
             </div>
           </ScrollArea>
-          <div className="border-t p-4">
+          <div className="border-t p-4 space-y-3">
+            {generatedData && (
+              <div className="flex gap-2 items-center">
+                <Input
+                  placeholder="Interviewer name..."
+                  value={interviewerName}
+                  onChange={(e) => setInterviewerName(e.target.value)}
+                  className="flex-1"
+                />
+                <Button onClick={handleSave} disabled={isLoading || !interviewerName.trim()}>
+                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                </Button>
+              </div>
+            )}
             <div className="flex gap-2">
               <Input
                 placeholder="Describe the job requirements, skills needed, and interview focus areas..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
+                disabled={isLoading}
               />
-              <Button onClick={handleSend}>
-                <Send className="h-4 w-4" />
+              <Button onClick={handleSend} disabled={isLoading || !input.trim()}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
           </div>
